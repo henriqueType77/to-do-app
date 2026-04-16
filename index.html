@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agenda Pro</title>
+
+<style>
+body {
+    font-family: Arial, sans-serif;
+    background: #f5f5f7;
+    margin: 0;
+    padding: 0;
+}
+
+.container {
+    width: 1000px;
+    margin: 40px auto;
+    background: #fff;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 3px 15px rgba(0,0,0,0.08);
+}
+
+/* FORM */
+.form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+input, select, textarea, button {
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+    font-family: Arial;
+}
+
+textarea {
+    resize: none;
+    height: 40px;
+}
+
+button {
+    background: #4f7cff;
+    color: white;
+    cursor: pointer;
+    border: none;
+}
+
+/* SEARCH */
+.search {
+    width: 100%;
+    margin-bottom: 15px;
+}
+
+/* BOARD */
+.board {
+    display: flex;
+    gap: 15px;
+}
+
+.column {
+    flex: 1;
+    background: #f8f9fb;
+    padding: 10px;
+    border-radius: 12px;
+    min-height: 420px;
+}
+
+.column h3 {
+    text-align: center;
+    color: #444;
+}
+
+/* CARD (NOTION STYLE) */
+.task {
+    background: white;
+    padding: 10px;
+    margin: 10px 0;
+    border-radius: 10px;
+    cursor: grab;
+    border: 1px solid #eee;
+    transition: 0.2s;
+}
+
+.task:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.task small {
+    display: block;
+    color: #666;
+    margin-top: 4px;
+}
+
+.alta { border-left: 5px solid #ff5c5c; }
+.media { border-left: 5px solid #ffb020; }
+.baixa { border-left: 5px solid #4caf50; }
+
+.actions button {
+    margin-top: 6px;
+    font-size: 12px;
+    margin-right: 5px;
+    background: #eee;
+    color: #333;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<!-- SEARCH -->
+<input class="search" id="search" placeholder="🔍 Buscar tarefas..." oninput="render()">
+
+<!-- FORM -->
+<div class="form">
+
+    <input id="text" placeholder="Tarefa">
+
+    <textarea id="desc" placeholder="Descrição"></textarea>
+
+    <input id="date" type="date">
+
+    <select id="priority">
+        <option value="baixa">Baixa</option>
+        <option value="media">Média</option>
+        <option value="alta">Alta</option>
+    </select>
+
+    <button onclick="addTask()">Adicionar</button>
+</div>
+
+<!-- BOARD -->
+<div class="board">
+
+    <div class="column" ondrop="drop(event,'todo')" ondragover="allowDrop(event)">
+        <h3>A Fazer</h3>
+        <div id="todo"></div>
+    </div>
+
+    <div class="column" ondrop="drop(event,'doing')" ondragover="allowDrop(event)">
+        <h3>Fazendo</h3>
+        <div id="doing"></div>
+    </div>
+
+    <div class="column" ondrop="drop(event,'done')" ondragover="allowDrop(event)">
+        <h3>Feito</h3>
+        <div id="done"></div>
+    </div>
+
+</div>
+
+</div>
+
+<script>
+let tasks = JSON.parse(localStorage.getItem("pro_tasks")) || [];
+
+function save() {
+    localStorage.setItem("pro_tasks", JSON.stringify(tasks));
+}
+
+/* ADD */
+function addTask() {
+    const text = document.getElementById("text").value;
+    const desc = document.getElementById("desc").value;
+    const date = document.getElementById("date").value;
+    const priority = document.getElementById("priority").value;
+
+    if (!text) return;
+
+    tasks.push({
+        id: Date.now(),
+        text,
+        desc,
+        date,
+        priority,
+        status: "todo"
+    });
+
+    clear();
+    save();
+    render();
+}
+
+function clear() {
+    document.getElementById("text").value = "";
+    document.getElementById("desc").value = "";
+    document.getElementById("date").value = "";
+}
+
+/* DRAG */
+function allowDrop(ev) { ev.preventDefault(); }
+
+function drag(ev, id) {
+    ev.dataTransfer.setData("id", id);
+}
+
+function drop(ev, status) {
+    ev.preventDefault();
+    const id = ev.dataTransfer.getData("id");
+
+    tasks = tasks.map(t => {
+        if (t.id == id) t.status = status;
+        return t;
+    });
+
+    save();
+    render();
+}
+
+/* DELETE */
+function deleteTask(id) {
+    tasks = tasks.filter(t => t.id != id);
+    save();
+    render();
+}
+
+/* EDIT (DESCRIÇÃO + TEXTO) */
+function editTask(id) {
+    const t = tasks.find(x => x.id == id);
+
+    const newText = prompt("Editar tarefa:", t.text);
+    const newDesc = prompt("Editar descrição:", t.desc);
+
+    if (newText !== null) t.text = newText;
+    if (newDesc !== null) t.desc = newDesc;
+
+    save();
+    render();
+}
+
+/* ALERTA DE VENCIMENTO */
+function checkAlerts() {
+    const today = new Date().toISOString().split("T")[0];
+
+    tasks.forEach(t => {
+        if (t.date && t.date === today && t.status !== "done") {
+            setTimeout(() => {
+                alert("🔔 Vence hoje: " + t.text);
+            }, 300);
+        }
+    });
+}
+
+/* RENDER */
+function render() {
+    const search = document.getElementById("search").value.toLowerCase();
+
+    ["todo","doing","done"].forEach(id => {
+        document.getElementById(id).innerHTML = "";
+    });
+
+    tasks
+    .filter(t => t.text.toLowerCase().includes(search))
+    .forEach(t => {
+
+        const div = document.createElement("div");
+        div.className = "task " + t.priority;
+        div.draggable = true;
+        div.ondragstart = (e) => drag(e, t.id);
+
+        div.innerHTML = `
+            <b>${t.text}</b>
+
+            <small>${t.desc || "Sem descrição"}</small>
+
+            <small>📅 ${t.date || "Sem data"}</small>
+
+            <small>Prioridade: ${t.priority}</small>
+
+            <div class="actions">
+                <button onclick="editTask(${t.id})">Editar</button>
+                <button onclick="deleteTask(${t.id})">Excluir</button>
+            </div>
+        `;
+
+        document.getElementById(t.status).appendChild(div);
+    });
+
+    checkAlerts();
+}
+
+render();
+</script>
+
+</body>
+</html>
